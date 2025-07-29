@@ -10,8 +10,15 @@ const tabs = [
   { label: 'Dữ Liệu' },
 ];
 
-function calculateStats(matches: Match[]) {
-  // Parse and aggregate player stats
+type StatsItem = { name: string; value: number };
+type Stats = {
+  mostWins: StatsItem[];
+  winRate: StatsItem[];
+  totalPoints: StatsItem[];
+  totalMatches: StatsItem[];
+};
+
+function calculateStats(matches: Match[]): Stats {
   const winCount: Record<string, number> = {};
   const winRate: Record<string, { win: number; total: number }> = {};
   const totalPoints: Record<string, number> = {};
@@ -24,18 +31,15 @@ function calculateStats(matches: Match[]) {
       const [team2_player1, team2_player2] = team2Str.split(', ').map((p) => p.trim());
       const [team1_score, team2_score] = match.result.split(' - ').map((s) => parseInt(s.trim()));
       const players = [team1_player1, team1_player2, team2_player1, team2_player2];
-      // Tổng số trận
       players.forEach((p) => {
         totalMatches[p] = (totalMatches[p] || 0) + 1;
       });
-      // Tổng điểm
       [team1_player1, team1_player2].forEach((p) => {
         totalPoints[p] = (totalPoints[p] || 0) + team1_score;
       });
       [team2_player1, team2_player2].forEach((p) => {
         totalPoints[p] = (totalPoints[p] || 0) + team2_score;
       });
-      // Thắng nhiều nhất
       if (team1_score > team2_score) {
         [team1_player1, team1_player2].forEach((p) => {
           winCount[p] = (winCount[p] || 0) + 1;
@@ -45,7 +49,6 @@ function calculateStats(matches: Match[]) {
           winCount[p] = (winCount[p] || 0) + 1;
         });
       }
-      // Tỷ lệ thắng
       [team1_player1, team1_player2].forEach((p) => {
         winRate[p] = winRate[p] || { win: 0, total: 0 };
         winRate[p].total++;
@@ -59,20 +62,19 @@ function calculateStats(matches: Match[]) {
     } catch {}
   });
 
-  // Format for UI
-  const mostWins = Object.entries(winCount)
+  const mostWins: StatsItem[] = Object.entries(winCount)
     .map(([name, value]) => ({ name, value }))
     .sort((a, b) => b.value - a.value)
     .slice(0, 5);
-  const winRateArr = Object.entries(winRate)
+  const winRateArr: StatsItem[] = Object.entries(winRate)
     .map(([name, obj]) => ({ name, value: obj.total ? Math.round((obj.win / obj.total) * 1000) / 10 : 0 }))
     .sort((a, b) => b.value - a.value)
     .slice(0, 5);
-  const totalPointsArr = Object.entries(totalPoints)
+  const totalPointsArr: StatsItem[] = Object.entries(totalPoints)
     .map(([name, value]) => ({ name, value }))
     .sort((a, b) => b.value - a.value)
     .slice(0, 5);
-  const totalMatchesArr = Object.entries(totalMatches)
+  const totalMatchesArr: StatsItem[] = Object.entries(totalMatches)
     .map(([name, value]) => ({ name, value }))
     .sort((a, b) => b.value - a.value)
     .slice(0, 5);
@@ -82,8 +84,7 @@ function calculateStats(matches: Match[]) {
 
 export default function Home() {
   const [activeTab, setActiveTab] = useState(1); // Default to 'Thống Kê'
-  const [matches, setMatches] = useState<Match[]>([]);
-  const [stats, setStats] = useState<any>(null);
+  const [stats, setStats] = useState<Stats | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
@@ -94,10 +95,9 @@ export default function Home() {
       try {
         const { data, error } = await supabase.from('game').select('*').order('created_at', { ascending: false });
         if (error) throw error;
-        setMatches(data || []);
         setStats(calculateStats(data || []));
-      } catch (err: any) {
-        setError(err.message || 'Lỗi không xác định');
+      } catch (err: unknown) {
+        setError(err instanceof Error ? err.message : 'Lỗi không xác định');
       } finally {
         setLoading(false);
       }
@@ -141,7 +141,7 @@ export default function Home() {
               <div className="flex items-center justify-center h-64 text-gray-400 text-xl font-semibold">Đang tải dữ liệu...</div>
             ) : error ? (
               <div className="flex items-center justify-center h-64 text-red-500 text-xl font-semibold">{error}</div>
-            ) : (
+            ) : stats && (
               <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
                 {/* Tháng Nhiều Nhất */}
                 <div className="rounded-xl shadow bg-white p-6">
@@ -149,7 +149,7 @@ export default function Home() {
                     <span role="img" aria-label="trophy">🏆</span> Tháng Nhiều Nhất
                   </div>
                   <ul className="text-gray-700">
-                    {stats.mostWins.map((item: any) => (
+                    {stats.mostWins.map((item) => (
                       <li key={item.name} className="flex justify-between py-1">
                         <span>{item.name}</span>
                         <span className="font-semibold text-indigo-600">{item.value} tháng</span>
@@ -163,7 +163,7 @@ export default function Home() {
                     <span role="img" aria-label="target">🎯</span> Tỷ Lệ Thắng
                   </div>
                   <ul className="text-gray-700">
-                    {stats.winRate.map((item: any) => (
+                    {stats.winRate.map((item) => (
                       <li key={item.name} className="flex justify-between py-1">
                         <span>{item.name}</span>
                         <span className="font-semibold text-indigo-600">{item.value}%</span>
@@ -177,7 +177,7 @@ export default function Home() {
                     <span role="img" aria-label="lightning">⚡</span> Tổng Điểm
                   </div>
                   <ul className="text-gray-700">
-                    {stats.totalPoints.map((item: any) => (
+                    {stats.totalPoints.map((item) => (
                       <li key={item.name} className="flex justify-between py-1">
                         <span>{item.name}</span>
                         <span className="font-semibold text-indigo-600">{item.value}</span>
@@ -191,7 +191,7 @@ export default function Home() {
                     <span role="img" aria-label="chart">📊</span> Số Trận
                   </div>
                   <ul className="text-gray-700">
-                    {stats.totalMatches.map((item: any) => (
+                    {stats.totalMatches.map((item) => (
                       <li key={item.name} className="flex justify-between py-1">
                         <span>{item.name}</span>
                         <span className="font-semibold text-indigo-600">{item.value} trận</span>
