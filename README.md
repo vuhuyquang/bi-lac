@@ -1,36 +1,88 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# Bi Lắc Stats
 
-## Getting Started
+Ứng dụng web quản lý kết quả chơi bi lắc với Supabase.
 
-First, run the development server:
+## Tính năng
+
+- 📊 Thống kê người chơi (số trận thắng, tỉ lệ thắng, tổng điểm, số trận)
+- 📝 Thêm trận đấu mới
+- 📋 Lịch sử trận đấu
+- 🏆 Xếp hạng người chơi
+- 📱 Responsive design
+
+## Thiết lập
+
+### 1. Cài đặt dependencies
+
+```bash
+npm install
+```
+
+### 2. Thiết lập Supabase
+
+1. Tạo tài khoản tại [supabase.com](https://supabase.com)
+2. Tạo project mới
+3. Vào SQL Editor và chạy script sau để tạo bảng:
+
+```sql
+CREATE TABLE matches (
+  id BIGSERIAL PRIMARY KEY,
+  team1_player1 TEXT NOT NULL,
+  team1_player2 TEXT NOT NULL,
+  team2_player1 TEXT NOT NULL,
+  team2_player2 TEXT NOT NULL,
+  team1_score INTEGER NOT NULL,
+  team2_score INTEGER NOT NULL,
+  created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+);
+
+-- Thêm dữ liệu mẫu
+INSERT INTO matches (team1_player1, team1_player2, team2_player1, team2_player2, team1_score, team2_score) VALUES
+('Thành', 'Hải', 'Cương', 'Sơn', 100, 0),
+('Thành', 'Hải', 'Quang', 'Tuấn', 50, 0),
+('Hải', 'Quang', 'Cương', 'Sơn', 50, 0),
+('Hải', 'Tuấn', 'Cương', 'Sơn', 150, 0),
+('Tuấn', 'Hải', 'Sơn', 'Thành', 0, 50);
+```
+
+4. Vào Settings > API để lấy URL và Anon Key
+5. Tạo file `.env.local` với nội dung:
+
+```
+NEXT_PUBLIC_SUPABASE_URL=your_supabase_url_here
+NEXT_PUBLIC_SUPABASE_ANON_KEY=your_supabase_anon_key_here
+```
+
+### 3. Chạy ứng dụng
 
 ```bash
 npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+Truy cập [http://localhost:3000](http://localhost:3000)
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+## Cấu trúc dự án
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+```
+src/
+├── app/
+│   ├── page.tsx          # Trang chính
+│   ├── layout.tsx        # Layout
+│   └── globals.css       # CSS toàn cục
+├── components/
+│   ├── StatsCard.tsx     # Card thống kê người chơi
+│   ├── MatchList.tsx     # Danh sách trận đấu
+│   └── AddMatchForm.tsx  # Form thêm trận đấu
+├── hooks/
+│   └── useStats.ts       # Hook tính toán thống kê
+└── lib/
+    └── supabase.ts       # Cấu hình Supabase
+```
 
-## Learn More
+## Công nghệ sử dụng
 
-To learn more about Next.js, take a look at the following resources:
-
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
-
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
-
-## Deploy on Vercel
-
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
-
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+- **Next.js 15** - React framework
+- **TypeScript** - Type safety
+- **Tailwind CSS** - Styling
+- **Supabase** - Database và backend
+- **Lucide React** - Icons
