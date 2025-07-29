@@ -1,12 +1,12 @@
-'use client'
+'use client';
 
 import { useState, useEffect } from 'react';
+import { supabase, Match } from '@/lib/supabase';
 
 const tabs = [
-  { label: 'Nhập Kết Quả', icon: '✏️' },
-  { label: 'Thống Kê', icon: '📊' },
-  { label: 'Lịch Sử', icon: '📝' },
-  { label: 'Dữ Liệu', icon: '💾' },
+  { label: 'Nhập Kết Quả' },
+  { label: 'Thống Kê' },
+  { label: 'Lịch Sử' },
 ];
 
 type StatsItem = { name: string; value: number };
@@ -17,22 +17,6 @@ type Stats = {
   totalMatches: StatsItem[];
 };
 
-type Match = {
-  id?: string;
-  name: string;
-  result: string;
-  created_at?: string;
-};
-
-// Mock data và functions thay thế Supabase
-const mockMatches: Match[] = [
-  { id: '1', name: 'Thành, Hải - Cương, Sơn', result: '100 - 80', created_at: '2024-01-15' },
-  { id: '2', name: 'Thành, Sơn - Hải, Cương', result: '90 - 95', created_at: '2024-01-16' },
-  { id: '3', name: 'Hải, Cương - Thành, Sơn', result: '110 - 85', created_at: '2024-01-17' },
-  { id: '4', name: 'Cương, Thành - Hải, Sơn', result: '75 - 100', created_at: '2024-01-18' },
-  { id: '5', name: 'Sơn, Hải - Thành, Cương', result: '120 - 90', created_at: '2024-01-19' },
-];
-
 function calculateStats(matches: Match[]): Stats {
   const winCount: Record<string, number> = {};
   const winRate: Record<string, { win: number; total: number }> = {};
@@ -42,19 +26,24 @@ function calculateStats(matches: Match[]): Stats {
   matches.forEach((match) => {
     try {
       const [team1Str, team2Str] = match.name.split(' - ');
-      const [team1_player1, team1_player2] = team1Str.split(', ').map((p) => p.trim());
-      const [team2_player1, team2_player2] = team2Str.split(', ').map((p) => p.trim());
-      const [team1_score, team2_score] = match.result.split(' - ').map((s) => parseInt(s.trim()));
-      const players = [team1_player1, team1_player2, team2_player1, team2_player2];
-      players.forEach((p) => {
+      const [team1_player1, team1_player2] = team1Str.split(',').map((p) => p.trim());
+      const [team2_player1, team2_player2] = team2Str.split(',').map((p) => p.trim());
+      const [team1_score, team2_score] = match.result.split('-').map((s) => parseInt(s.trim()));
+
+      // Cộng số trận cho từng người
+      [team1_player1, team1_player2, team2_player1, team2_player2].forEach((p) => {
         totalMatches[p] = (totalMatches[p] || 0) + 1;
       });
+
+      // Cộng điểm cho từng người đúng đội
       [team1_player1, team1_player2].forEach((p) => {
         totalPoints[p] = (totalPoints[p] || 0) + team1_score;
       });
       [team2_player1, team2_player2].forEach((p) => {
         totalPoints[p] = (totalPoints[p] || 0) + team2_score;
       });
+
+      // Cộng số trận thắng cho đúng đội thắng
       if (team1_score > team2_score) {
         [team1_player1, team1_player2].forEach((p) => {
           winCount[p] = (winCount[p] || 0) + 1;
@@ -64,6 +53,8 @@ function calculateStats(matches: Match[]): Stats {
           winCount[p] = (winCount[p] || 0) + 1;
         });
       }
+
+      // Cộng số trận và số trận thắng cho tỷ lệ thắng
       [team1_player1, team1_player2].forEach((p) => {
         winRate[p] = winRate[p] || { win: 0, total: 0 };
         winRate[p].total++;
@@ -81,14 +72,20 @@ function calculateStats(matches: Match[]): Stats {
     .map(([name, value]) => ({ name, value }))
     .sort((a, b) => b.value - a.value)
     .slice(0, 5);
+
   const winRateArr: StatsItem[] = Object.entries(winRate)
-    .map(([name, obj]) => ({ name, value: obj.total ? Math.round((obj.win / obj.total) * 1000) / 10 : 0 }))
+    .map(([name, obj]) => ({
+      name,
+      value: obj.total ? Math.round((obj.win / obj.total) * 1000) / 10 : 0,
+    }))
     .sort((a, b) => b.value - a.value)
     .slice(0, 5);
+
   const totalPointsArr: StatsItem[] = Object.entries(totalPoints)
     .map(([name, value]) => ({ name, value }))
     .sort((a, b) => b.value - a.value)
     .slice(0, 5);
+
   const totalMatchesArr: StatsItem[] = Object.entries(totalMatches)
     .map(([name, value]) => ({ name, value }))
     .sort((a, b) => b.value - a.value)
@@ -98,6 +95,7 @@ function calculateStats(matches: Match[]): Stats {
 }
 
 function parseMatchInput(input: string) {
+  // VD: Thành, Hải - Cương, Sơn: 100 - 0
   const match = input.match(/^(.+?) - (.+?):\s*(\d+\s*-\s*\d+)$/);
   if (!match) return null;
   return {
@@ -111,7 +109,8 @@ function AddMatchForm({ onMatchAdded }: { onMatchAdded: () => void }) {
   const [loading, setLoading] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
 
-  const handleSubmit = () => {
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
     const parsed = parseMatchInput(input);
     if (!parsed) {
       setMessage('Sai định dạng! Đúng: Thành, Hải - Cương, Sơn: 100 - 0');
@@ -119,282 +118,197 @@ function AddMatchForm({ onMatchAdded }: { onMatchAdded: () => void }) {
     }
     setLoading(true);
     setMessage(null);
-    
-    // Simulate API call
-    setTimeout(() => {
-      setLoading(false);
+    const { error } = await supabase.from('game').insert(parsed);
+    setLoading(false);
+    if (error) {
+      setMessage('Lỗi khi lưu dữ liệu!');
+    } else {
       setMessage('Lưu thành công!');
       setInput('');
       onMatchAdded();
-    }, 1000);
+    }
   };
 
   return (
-    <div className="relative">
-      {/* Decorative elements */}
-      <div className="absolute -top-4 -left-4 w-20 h-20 bg-gradient-to-br from-pink-400 to-purple-400 rounded-full opacity-20 animate-pulse"></div>
-      <div className="absolute -bottom-4 -right-4 w-16 h-16 bg-gradient-to-br from-blue-400 to-cyan-400 rounded-full opacity-20 animate-pulse delay-500"></div>
-      
-      <div className="relative bg-white/90 backdrop-blur-xl rounded-3xl shadow-2xl p-10 max-w-2xl mx-auto mt-8 border border-white/30 overflow-hidden">
-        {/* Animated background gradient */}
-        <div className="absolute inset-0 bg-gradient-to-r from-indigo-500/10 via-purple-500/10 to-pink-500/10 animate-pulse"></div>
-        
-        <div className="relative z-10">
-          <div className="text-center mb-8">
-            <div className="inline-flex items-center justify-center w-16 h-16 bg-gradient-to-r from-indigo-500 to-purple-600 rounded-2xl mb-4 shadow-lg transform rotate-3 hover:rotate-0 transition-transform duration-300">
-              <span className="text-2xl text-white">🎱</span>
-            </div>
-            <h2 className="text-3xl font-bold bg-gradient-to-r from-indigo-600 to-purple-600 bg-clip-text text-transparent mb-2">
-              Nhập Kết Quả Trận Đấu
-            </h2>
-            <p className="text-gray-600">Ghi lại kết quả để theo dõi thống kê</p>
-          </div>
-
-          <div className="space-y-6">
-            <div className="relative">
-              <input
-                type="text"
-                value={input}
-                onChange={e => setInput(e.target.value)}
-                onKeyDown={(e) => e.key === 'Enter' && handleSubmit()}
-                className="w-full border-0 rounded-2xl px-6 py-4 text-lg font-medium text-gray-800 placeholder-gray-400 bg-white/80 backdrop-blur-sm shadow-lg focus:shadow-xl focus:ring-4 focus:ring-indigo-500/30 outline-none transition-all duration-300 transform hover:scale-[1.02]"
-                placeholder="Thành, Hải - Cương, Sơn: 100 - 0"
-                required
-              />
-              <div className="absolute inset-0 rounded-2xl bg-gradient-to-r from-indigo-500/20 to-purple-500/20 -z-10 blur-xl opacity-0 hover:opacity-100 transition-opacity duration-300"></div>
-            </div>
-
-            <button
-              type="button"
-              onClick={handleSubmit}
-              className="w-full bg-gradient-to-r from-indigo-500 via-purple-500 to-pink-500 text-white py-4 rounded-2xl font-bold text-lg shadow-xl hover:shadow-2xl transform hover:scale-105 active:scale-95 transition-all duration-300 relative overflow-hidden group"
-              disabled={loading}
-            >
-              <div className="absolute inset-0 bg-white/20 transform -skew-x-12 -translate-x-full group-hover:translate-x-full transition-transform duration-700"></div>
-              <span className="relative z-10">
-                {loading ? (
-                  <div className="flex items-center justify-center gap-2">
-                    <div className="w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin"></div>
-                    Đang lưu...
-                  </div>
-                ) : (
-                  '🚀 Lưu Kết Quả'
-                )}
-              </span>
-            </button>
-
-            {message && (
-              <div className={`text-center p-4 rounded-2xl font-medium transform animate-bounce ${
-                message.includes('thành công') 
-                  ? 'bg-green-100 text-green-700 border border-green-200' 
-                  : 'bg-red-100 text-red-700 border border-red-200'
-              }`}>
-                <span className="inline-block mr-2">
-                  {message.includes('thành công') ? '✅' : '❌'}
-                </span>
-                {message}
-              </div>
-            )}
-
-            <div className="bg-gray-50/80 rounded-2xl p-4 text-center">
-              <p className="text-gray-600 text-sm">
-                <span className="font-semibold text-indigo-600">Định dạng:</span>
-                <br />
-                <code className="bg-white/80 px-3 py-1 rounded-lg text-indigo-700 font-mono text-base mt-2 inline-block">
-                  Thành, Hải - Cương, Sơn: 100 - 0
-                </code>
-              </p>
-            </div>
-          </div>
+    <form
+      onSubmit={handleSubmit}
+      className="bg-white border border-gray-200 rounded-lg shadow-sm p-4 max-w-md mx-auto mt-6 flex flex-col gap-3"
+    >
+      <label className="block text-base font-semibold mb-1 text-gray-700">Nhập kết quả trận đấu</label>
+      <input
+        type="text"
+        value={input}
+        onChange={e => setInput(e.target.value)}
+        className="w-full border border-gray-300 rounded px-3 py-2 text-base font-medium text-gray-800 placeholder-gray-400 bg-white outline-none focus:ring-2 focus:ring-blue-200 transition"
+        placeholder="Thành, Hải - Cương, Sơn: 100 - 0"
+        required
+      />
+      <button
+        type="submit"
+        className="w-full bg-blue-500 text-white py-2 rounded font-semibold hover:bg-blue-600 transition"
+        disabled={loading}
+      >
+        {loading ? 'Đang lưu...' : 'Lưu kết quả'}
+      </button>
+      {message && (
+        <div className={`mt-1 text-center text-sm ${message.includes('thành công') ? 'text-green-600' : 'text-red-500'}`}>
+          {message}
         </div>
+      )}
+      <div className="text-gray-400 text-xs text-center">
+        Định dạng: <span className="font-mono">Thành, Hải - Cương, Sơn: 100 - 0</span>
       </div>
-    </div>
+    </form>
   );
 }
 
-function StatsCard({ title, icon, items, colorClass, delay = 0 }: {
-  title: string;
-  icon: string;
-  items: StatsItem[];
-  colorClass: string;
-  delay?: number;
-}) {
-  const [isVisible, setIsVisible] = useState(false);
-
-  useEffect(() => {
-    const timer = setTimeout(() => setIsVisible(true), delay);
-    return () => clearTimeout(timer);
-  }, [delay]);
-
+function MatchHistory({ matches }: { matches: Match[] }) {
+  const [isClient, setIsClient] = useState(false);
+  useEffect(() => { setIsClient(true); }, []);
+  if (!matches.length) {
+    return <div className="text-gray-400 text-center py-8">Chưa có dữ liệu trận đấu nào.</div>;
+  }
   return (
-    <div className={`transform transition-all duration-700 ${isVisible ? 'translate-y-0 opacity-100' : 'translate-y-8 opacity-0'}`}>
-      <div className="group relative">
-        <div className={`absolute inset-0 bg-gradient-to-r ${colorClass} rounded-3xl blur-xl opacity-30 group-hover:opacity-50 transition-opacity duration-300`}></div>
-        <div className="relative bg-white/90 backdrop-blur-xl rounded-3xl shadow-2xl p-8 border border-white/30 hover:shadow-3xl transform hover:scale-105 transition-all duration-300">
-          <div className="flex items-center gap-3 mb-6">
-            <div className={`w-12 h-12 bg-gradient-to-r ${colorClass} rounded-2xl flex items-center justify-center text-2xl shadow-lg transform rotate-3 group-hover:rotate-0 transition-transform duration-300`}>
-              {icon}
+    <div className="max-w-2xl mx-auto mt-4">
+      <ul className="divide-y divide-gray-100 bg-white border border-gray-200 rounded-lg shadow-sm">
+        {matches.map((match) => (
+          <li key={match.id} className="flex flex-col md:flex-row md:items-center justify-between px-4 py-3">
+            <div className="font-medium text-gray-700">{match.name}</div>
+            <div className="text-blue-600 font-bold text-lg">{match.result}</div>
+            <div className="text-xs text-gray-400 md:ml-4">
+              {isClient ? new Date(match.created_at).toLocaleString('vi-VN') : ''}
             </div>
-            <h3 className={`text-xl font-bold bg-gradient-to-r ${colorClass.replace('from-', 'from-').replace('to-', 'to-')} bg-clip-text text-transparent`}>
-              {title}
-            </h3>
-          </div>
-          
-          <div className="space-y-3">
-            {items.map((item, index) => (
-              <div 
-                key={item.name} 
-                className="flex justify-between items-center py-3 px-4 rounded-2xl bg-white/50 hover:bg-white/70 transition-all duration-300 transform hover:scale-105"
-                style={{ animationDelay: `${index * 100}ms` }}
-              >
-                <span className="font-medium text-gray-800 flex items-center gap-2">
-                  <div className="w-2 h-2 bg-gradient-to-r from-indigo-500 to-purple-500 rounded-full"></div>
-                  {item.name}
-                </span>
-                <span className={`font-bold text-lg bg-gradient-to-r ${colorClass} bg-clip-text text-transparent`}>
-                  {title === 'Tỷ Lệ Thắng' ? `${item.value}%` : 
-                   title === 'Số Trận' ? `${item.value} trận` :
-                   title === 'Thắng Nhiều Nhất' ? `${item.value} thắng` :
-                   item.value}
-                </span>
-              </div>
-            ))}
-          </div>
-        </div>
-      </div>
+          </li>
+        ))}
+      </ul>
     </div>
   );
 }
 
 export default function Home() {
-  const [activeTab, setActiveTab] = useState(1);
+  const [activeTab, setActiveTab] = useState(1); // Default to 'Thống Kê'
   const [stats, setStats] = useState<Stats | null>(null);
+  const [matches, setMatches] = useState<Match[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
-  const fetchStats = async () => {
+  const fetchData = async () => {
     setLoading(true);
     setError(null);
     try {
-      // Simulate API call
-      setTimeout(() => {
-        setStats(calculateStats(mockMatches));
-        setLoading(false);
-      }, 1000);
+      const { data, error } = await supabase.from('game').select('*').order('created_at', { ascending: false });
+      if (error) throw error;
+      setMatches(data || []);
+      setStats(calculateStats(data || []));
     } catch (err: unknown) {
       setError(err instanceof Error ? err.message : 'Lỗi không xác định');
+    } finally {
       setLoading(false);
     }
   };
 
   useEffect(() => {
-    fetchStats();
+    fetchData();
   }, []);
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-indigo-900 via-purple-900 to-pink-900 relative overflow-hidden">
-      {/* Animated background elements */}
-      <div className="absolute inset-0">
-        <div className="absolute top-1/4 left-1/4 w-64 h-64 bg-blue-500/10 rounded-full blur-3xl animate-pulse"></div>
-        <div className="absolute top-3/4 right-1/4 w-96 h-96 bg-purple-500/10 rounded-full blur-3xl animate-pulse delay-700"></div>
-        <div className="absolute bottom-1/4 left-1/2 w-80 h-80 bg-pink-500/10 rounded-full blur-3xl animate-pulse delay-1000"></div>
-      </div>
-
-      <div className="relative z-10 p-4">
-        <div className="max-w-7xl mx-auto">
-          {/* Header */}
-          <div className="text-center mb-12">
-            <div className="inline-flex items-center justify-center w-24 h-24 bg-gradient-to-r from-indigo-500 via-purple-500 to-pink-500 rounded-3xl mb-6 shadow-2xl transform hover:scale-110 transition-transform duration-300">
-              <span className="text-4xl font-bold text-white drop-shadow-lg">8</span>
-            </div>
-            <h1 className="text-6xl font-extrabold bg-gradient-to-r from-white via-blue-100 to-purple-100 bg-clip-text text-transparent mb-4 drop-shadow-lg">
-              Thống Kê Bi Lắc
-            </h1>
-            <p className="text-xl text-white/80 max-w-2xl mx-auto leading-relaxed">
-              Hệ thống quản lý và thống kê kết quả trận đấu chuyên nghiệp
-            </p>
-          </div>
-
-          {/* Tabs */}
-          <div className="flex flex-wrap justify-center gap-2 mb-8">
-            {tabs.map((tab, idx) => (
-              <button
-                key={tab.label}
-                className={`flex items-center gap-3 px-8 py-4 rounded-2xl font-bold text-lg transition-all duration-300 transform hover:scale-105 ${
-                  activeTab === idx
-                    ? 'bg-white text-indigo-700 shadow-2xl scale-105'
-                    : 'bg-white/20 text-white hover:bg-white/30 backdrop-blur-sm'
-                }`}
-                onClick={() => setActiveTab(idx)}
-              >
-                <span className="text-xl">{tab.icon}</span>
-                {tab.label}
-              </button>
-            ))}
-          </div>
-
-          {/* Content */}
-          <div className="bg-white/10 backdrop-blur-xl rounded-3xl shadow-2xl border border-white/20 overflow-hidden">
-            <div className="p-8 min-h-[500px]">
-              {activeTab === 0 && (
-                <AddMatchForm onMatchAdded={fetchStats} />
-              )}
-              
-              {activeTab === 1 && (
-                <>
-                  {loading ? (
-                    <div className="flex flex-col items-center justify-center h-64 text-white">
-                      <div className="w-16 h-16 border-4 border-white/30 border-t-white rounded-full animate-spin mb-4"></div>
-                      <p className="text-xl font-semibold">Đang tải dữ liệu...</p>
-                    </div>
-                  ) : error ? (
-                    <div className="flex items-center justify-center h-64 text-red-400 text-xl font-semibold">
-                      ❌ {error}
-                    </div>
-                  ) : stats && (
-                    <div className="grid grid-cols-1 lg:grid-cols-2 xl:grid-cols-4 gap-8">
-                      <StatsCard
-                        title="Thắng Nhiều Nhất"
-                        icon="🏆"
-                        items={stats.mostWins}
-                        colorClass="from-yellow-400 to-orange-500"
-                        delay={0}
-                      />
-                      <StatsCard
-                        title="Tỷ Lệ Thắng"
-                        icon="🎯"
-                        items={stats.winRate}
-                        colorClass="from-green-400 to-blue-500"
-                        delay={200}
-                      />
-                      <StatsCard
-                        title="Tổng Điểm"
-                        icon="⚡"
-                        items={stats.totalPoints}
-                        colorClass="from-purple-400 to-pink-500"
-                        delay={400}
-                      />
-                      <StatsCard
-                        title="Số Trận"
-                        icon="📊"
-                        items={stats.totalMatches}
-                        colorClass="from-indigo-400 to-cyan-500"
-                        delay={600}
-                      />
-                    </div>
-                  )}
-                </>
-              )}
-              
-              {activeTab !== 0 && activeTab !== 1 && (
-                <div className="flex flex-col items-center justify-center h-64 text-white/80">
-                  <div className="text-6xl mb-4">🚧</div>
-                  <p className="text-2xl font-semibold mb-2">Chức năng đang phát triển</p>
-                  <p className="text-lg">Sẽ sớm có trong phiên bản tiếp theo!</p>
+    <div className="min-h-screen bg-gray-50 py-6 px-2">
+      <div className="max-w-3xl mx-auto rounded-lg shadow bg-white/80 border border-gray-200">
+        {/* Header */}
+        <div className="p-5 border-b border-gray-100 text-center">
+          <h1 className="text-2xl font-bold text-gray-800 tracking-tight">Bi Lắc Stats</h1>
+          <p className="text-gray-500 text-sm mt-1">Quản lý & thống kê kết quả bi lắc</p>
+        </div>
+        {/* Tabs */}
+        <div className="flex border-b border-gray-100 bg-white">
+          {tabs.map((tab, idx) => (
+            <button
+              key={tab.label}
+              className={`flex-1 py-2 text-center font-medium transition-colors duration-150 ${
+                activeTab === idx
+                  ? 'bg-white text-blue-600 border-b-2 border-blue-500'
+                  : 'text-gray-500 hover:text-blue-600'
+              }`}
+              onClick={() => setActiveTab(idx)}
+            >
+              {tab.label}
+            </button>
+          ))}
+        </div>
+        {/* Tab Content */}
+        <div className="p-4 min-h-[300px]">
+          {activeTab === 0 && <AddMatchForm onMatchAdded={fetchData} />}
+          {activeTab === 1 && (
+            loading ? (
+              <div className="flex items-center justify-center h-40 text-gray-400 text-lg font-semibold">Đang tải dữ liệu...</div>
+            ) : error ? (
+              <div className="flex items-center justify-center h-40 text-red-500 text-lg font-semibold">{error}</div>
+            ) : stats && (
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div className="bg-white border border-gray-100 rounded-lg shadow-sm p-4">
+                  <div className="font-semibold text-gray-700 mb-2 flex items-center gap-2">
+                    🏆 Thắng Nhiều Nhất
+                  </div>
+                  <ul className="text-gray-700 text-base">
+                    {stats.mostWins.map((item) => (
+                      <li key={item.name} className="flex justify-between py-1">
+                        <span>{item.name}</span>
+                        <span className="font-semibold text-blue-600">{item.value} thắng</span>
+                      </li>
+                    ))}
+                  </ul>
                 </div>
-              )}
-            </div>
-          </div>
+                <div className="bg-white border border-gray-100 rounded-lg shadow-sm p-4">
+                  <div className="font-semibold text-gray-700 mb-2 flex items-center gap-2">
+                    🎯 Tỷ Lệ Thắng
+                  </div>
+                  <ul className="text-gray-700 text-base">
+                    {stats.winRate.map((item) => (
+                      <li key={item.name} className="flex justify-between py-1">
+                        <span>{item.name}</span>
+                        <span className="font-semibold text-purple-600">{item.value}%</span>
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+                <div className="bg-white border border-gray-100 rounded-lg shadow-sm p-4">
+                  <div className="font-semibold text-gray-700 mb-2 flex items-center gap-2">
+                    ⚡ Tổng Điểm
+                  </div>
+                  <ul className="text-gray-700 text-base">
+                    {stats.totalPoints.map((item) => (
+                      <li key={item.name} className="flex justify-between py-1">
+                        <span>{item.name}</span>
+                        <span className="font-semibold text-yellow-600">{item.value}</span>
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+                <div className="bg-white border border-gray-100 rounded-lg shadow-sm p-4">
+                  <div className="font-semibold text-gray-700 mb-2 flex items-center gap-2">
+                    📊 Số Trận
+                  </div>
+                  <ul className="text-gray-700 text-base">
+                    {stats.totalMatches.map((item) => (
+                      <li key={item.name} className="flex justify-between py-1">
+                        <span>{item.name}</span>
+                        <span className="font-semibold text-pink-600">{item.value} trận</span>
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              </div>
+            )
+          )}
+          {activeTab === 2 && (
+            loading ? (
+              <div className="flex items-center justify-center h-40 text-gray-400 text-lg font-semibold">Đang tải dữ liệu...</div>
+            ) : error ? (
+              <div className="flex items-center justify-center h-40 text-red-500 text-lg font-semibold">{error}</div>
+            ) : (
+              <MatchHistory matches={matches} />
+            )
+          )}
         </div>
       </div>
     </div>
